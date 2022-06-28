@@ -1,0 +1,191 @@
+---
+title: 'CIND 123 - Data Analytics: Basic Methods'
+---
+
+The Titanic Passenger Survival Data Set provides information on the fate of passengers on the fatal maiden voyage of the ocean liner "Titanic." The dataset is available from the Department of Biostatistics at the Vanderbilt University School of Medicine (https://biostat.app.vumc.org/wiki/pub/Main/DataSets/titanic3.csv)in several formats. store the Titanic Data Set `titanic_train` using the following commands. 
+
+
+```{r}
+#install.packages("titanic")
+library(titanic)
+titanicDataset <- read.csv(
+  file = "https://biostat.app.vumc.org/wiki/pub/Main/DataSets/titanic3.csv",
+  stringsAsFactors = F)
+summary(titanicDataset)
+
+# if you get the following error message when you knit 
+#     Error in contrib.url(repos,"source")
+# you can fix it in 2 ways
+# Method 1: comment out the install.packages() in your code
+# Method 2: add specific repos address in the install.package() comments, e.g. install.packages("package_name", repos = "http://cran.us.r-project.org")
+
+```
+
+a) Extract and show the columns `sex`, `age`, `fare`, `cabin` and `survived` into a new data frame of the name 'titanicSubset'.
+```{r}
+# Create the new subset dataframe 'titanicSubset' with given columns
+titanicSubset <- titanicDataset[, c("sex", "age", "fare", "cabin", "survived")]
+
+```
+
+
+b) Numerical data: Use the count() function from the `dplyr` package to display the total number of passengers within each Ticket Class `Pclass`.
+
+```{r}
+# Load the `dplyr` package
+library(dplyr)
+
+# Check NA for `pclass`. If no NA, we can move forward.
+sum(is.na(titanicDataset$pclass))
+
+# Display the number of passengers under each Ticket Class `Pclass`
+# Use the count() function on `titanicDataset
+# Store the result to a new variable `passbClass`
+passbClass <- titanicDataset %>% count(pclass)
+
+# View `passbClass`
+passbClass
+
+# Rename the column `n` into meaningful name `totalPass`
+# Check the result again
+passbClass <- rename(passbClass, totalPass = n)
+passbClass
+
+```
+
+
+c) Categorical data: Use count() and group_by() functions from the `dplyr` package to calculate the number of passengers by `sex`.
+
+```{r}
+# Check NA for `sex` column. If NA=0, we can move forward.
+sum(is.na(titanicDataset$sex))
+
+
+# Calculate the number of passengers by `sex`
+# Use group_by() first, pipe the result to count() for the `sex` column
+# Store the result to a new variable `passbSex`
+passbSex <- titanicDataset %>%
+                  group_by(sex) %>%
+                  count(sex)
+
+# View `passbSex` - note the wonky column names
+passbSex
+
+# Change the temp column names into readble ones
+passbSex <- rename(passbSex, totalPass = n)
+
+# Change the tibble into dataframe to manipulate data easier
+passbSex <- as.data.frame(passbSex)
+
+# Check again `passbSex`
+passbSex
+
+```
+
+
+d) Use the aggregate() function to calculate the 'survivalCount' of each `sex` and calculate the survival rate of each sex. Then draw the conclusion on which sex has the higher survival rate.
+
+```{r}
+# Pull the overview of the `titanicDataset` to check the presence of NAs
+str(titanicDataset)
+
+# Recheck the number of NAs in the `sex`, `survived` columns before calculation
+# NAs may affect aggregating the categorical `sex` & nominal `survived` variables
+sum(is.na(titanicDataset$sex))
+sum(is.na(titanicDataset$survived))
+
+# Use aggregate() to calculate the 'survivalCount' of each `sex` with na.rm=True
+aggSexSurv = aggregate(
+                    list(survivalCount = titanicDataset$survived),
+                    by = list(sex = titanicDataset$sex),
+                    FUN = sum,
+                    na.rm = TRUE
+                    )
+
+# Calculate the survival rate of each sex
+aggSexSurv$totalPass = passbSex$totalPass
+aggSexSurv$survivalRate = aggSexSurv$survivalCount / aggSexSurv$totalPass
+aggSexSurv
+
+# Conclusion: Female has a higher survival rate than male in the Titanic tragedy.
+# The survival rate of female is 72.7%, compared to 19.1% of male counterparts.
+
+```
+
+
+e) Using boxplot to display the distribution of age for each sex and infer if male or female group is older.
+
+```{r}
+# Check NA for the `age` column. We know there's no NA in `sex`.
+sum(is.na(titanicDataset$age))
+
+# 263 NAs present in `age`, we can't just drop them by na.omit()
+# We need to check further how are NAs are distributed in `titanicDataset`
+checkNA <- function(x) {sum(is.na(x))/length(x)*100}
+apply(titanicDataset, 2, checkNA)
+
+# Found 20% missing values in `age`, 90% NA in `body`
+# If we drop all NAs, it'll deeply affect the dataset, especially with `body`
+# Let's keep `titanicDataset` intact & work on omitting NAs in `titanicSubset`
+# Note that NA appears only in `age` and `fare` in the subset (just >20% of the dataset was dropped)
+newtitanicSubset <- na.omit(titanicSubset)
+
+# Use boxplot to display the distribution of age for each sex
+boxplot(
+      newtitanicSubset$age~newtitanicSubset$sex,
+      xlab='sex',
+      ylab='age',
+      col=c("pink","light blue"),
+      main='Boxplot Distribution of Age for each Passenger Sex',
+      outline = TRUE
+      )
+
+```
+
+
+f) Calculate the average age for male and female and describe if the calculation agrees with the box plot.
+
+```{r}
+# Calculate the average age for male and female using `newtitanicSubset`
+aggSexAge = aggregate(
+                      list(avgAge = newtitanicSubset$age),
+                      by = list(sex = newtitanicSubset$sex),
+                      FUN = mean, 
+                      na.rm = TRUE
+                      )
+# View `aggSexAge`
+aggSexAge
+
+# The calculation above agrees with the box plot:
+# The median avgAge lines of both male, female skew left inside the box
+# The box plot distribution of both sexes slightly skew right
+# Thus for each gender, mean(avgAge) > median(avgAge)
+```
+
+
+g) Use the for loop and if control statements to list the women’s names, age 34 or more that embarked from S (Southampton), on the Titanic.
+
+```{r}
+# We will use the `titanicDataset` for the full information
+# Use the for loop and if to find the women' names who satisfies the conditions
+
+# Create an empty character vector
+i <- character()
+
+for (
+  row in 1:nrow(titanicDataset) # Iterate over the rows in the dataframe
+  ){
+  if (
+    titanicDataset[row, "sex"] == 'female' # Female condition
+      & !is.na(titanicDataset[row, "age"]  # Because age has NA values
+      & titanicDataset[row, "age"] >= 34   # Age 34 or more
+      & titanicDataset[row, "embarked"] == 'S')  # Embarked from S
+    ) {
+    i <- c(i, titanicDataset[row, "name"]) # Add the name from that row to "i"
+  } else {}  # If not, nothing happens
+}
+
+# View the result "i" that stores the women’s names given the conditions
+i
+```
+
